@@ -22,13 +22,10 @@ st.markdown("""
 MESES = {1: 'enero', 2: 'febrero', 3: 'marzo', 4: 'abril', 5: 'mayo', 6: 'junio', 
          7: 'julio', 8: 'agosto', 9: 'septiembre', 10: 'octubre', 11: 'noviembre', 12: 'diciembre'}
 
-# 2. CARGA Y PROCESAMIENTO
+# 2. CARGA Y PROCESAMIENTO CON PARQUET (CON CONVERSIÓN SEGURA)
 @st.cache_data
 def cargar_datos():
-    try:
-        df = pd.read_csv('base_aac.csv', sep=None, engine='python')
-    except Exception:
-        df = pd.read_csv('base_aac.csv', sep=';')
+    df = pd.read_parquet('base_aac.parquet')
     
     # Limpiar espacios en blanco en los nombres de las columnas
     df.columns = df.columns.str.strip()
@@ -36,34 +33,10 @@ def cargar_datos():
     if 'Costo neto' not in df.columns:
         st.error(f"⚠️ No se encontró la columna 'Costo neto'. Columnas detectadas: {list(df.columns)}")
         st.stop()
-    
-    # Función robusta para limpiar valores numéricos (Costo neto y Unds)
-    def limpiar_numero(val):
-        if pd.isna(val):
-            return 0.0
-        val_s = str(val).strip().replace('$', '').replace('€', '').replace(' ', '')
-        if val_s == '' or val_s.lower() == 'nan':
-            return 0.0
         
-        # Manejo de formatos con puntos y comas
-        if '.' in val_s and ',' in val_s:
-            if val_s.rfind('.') > val_s.rfind(','):
-                val_s = val_s.replace(',', '')
-            else:
-                val_s = val_s.replace('.', '').replace(',', '.')
-        elif ',' in val_s:
-            val_s = val_s.replace(',', '.')
-        elif '.' in val_s:
-            if val_s.count('.') > 1:
-                val_s = val_s.replace('.', '')
-        
-        try:
-            return float(val_s)
-        except ValueError:
-            return 0.0
-
-    df['Costo neto'] = df['Costo neto'].apply(limpiar_numero)
-    df['Unds'] = df['Unds'].apply(limpiar_numero)
+    # Forzar conversión numérica por seguridad para evitar errores de formato
+    df['Costo neto'] = pd.to_numeric(df['Costo neto'], errors='coerce').fillna(0.0)
+    df['Unds'] = pd.to_numeric(df['Unds'], errors='coerce').fillna(0.0)
     df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
     
     return df.dropna(subset=['Fecha'])

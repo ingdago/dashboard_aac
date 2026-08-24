@@ -24,7 +24,7 @@ st.markdown("""
 @st.cache_data
 def cargar_datos():
     # Lectura del archivo local en el repositorio
-    df = pd.read_csv('base_aac.csv', sep=None, engine='python', encoding='utf-8-sig')
+df = pd.read_excel('base_aac.xlsx', engine='openpyxl')
     
     # Normalización de la columna Costo Neto (Manejo de formato $ 1.292,00)
     if df['Costo neto'].dtype == 'O':

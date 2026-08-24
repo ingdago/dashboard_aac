@@ -25,15 +25,45 @@ MESES = {1: 'enero', 2: 'febrero', 3: 'marzo', 4: 'abril', 5: 'mayo', 6: 'junio'
 # 2. CARGA Y PROCESAMIENTO
 @st.cache_data
 def cargar_datos():
-    df = pd.read_excel('base_aac.xlsx', engine='openpyxl')
+    try:
+        df = pd.read_csv('base_aac.csv', sep=None, engine='python')
+    except Exception:
+        df = pd.read_csv('base_aac.csv', sep=';')
     
-    if df['Costo neto'].dtype == 'O':
-        df['Costo neto'] = df['Costo neto'].astype(str).str.replace('$', '', regex=False)
-        df['Costo neto'] = df['Costo neto'].str.replace('.', '', regex=False)
-        df['Costo neto'] = df['Costo neto'].str.replace(',', '.', regex=False)
+    # Limpiar espacios en blanco en los nombres de las columnas
+    df.columns = df.columns.str.strip()
     
-    df['Costo neto'] = pd.to_numeric(df['Costo neto'], errors='coerce').fillna(0)
-    df['Unds'] = pd.to_numeric(df['Unds'], errors='coerce').fillna(0)
+    if 'Costo neto' not in df.columns:
+        st.error(f"⚠️ No se encontró la columna 'Costo neto'. Columnas detectadas: {list(df.columns)}")
+        st.stop()
+    
+    # Función robusta para limpiar valores numéricos (Costo neto y Unds)
+    def limpiar_numero(val):
+        if pd.isna(val):
+            return 0.0
+        val_s = str(val).strip().replace('$', '').replace('€', '').replace(' ', '')
+        if val_s == '' or val_s.lower() == 'nan':
+            return 0.0
+        
+        # Manejo de formatos con puntos y comas
+        if '.' in val_s and ',' in val_s:
+            if val_s.rfind('.') > val_s.rfind(','):
+                val_s = val_s.replace(',', '')
+            else:
+                val_s = val_s.replace('.', '').replace(',', '.')
+        elif ',' in val_s:
+            val_s = val_s.replace(',', '.')
+        elif '.' in val_s:
+            if val_s.count('.') > 1:
+                val_s = val_s.replace('.', '')
+        
+        try:
+            return float(val_s)
+        except ValueError:
+            return 0.0
+
+    df['Costo neto'] = df['Costo neto'].apply(limpiar_numero)
+    df['Unds'] = df['Unds'].apply(limpiar_numero)
     df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
     
     return df.dropna(subset=['Fecha'])
@@ -172,7 +202,6 @@ if not df_resumen.empty:
 
 if filas_tabla:
     df_final = pd.DataFrame(filas_tabla)
-    # Forzar tipado de texto en Bodega para evitar errores en Arrow
     df_final['Bodega'] = df_final['Bodega'].astype(str)
     
     def resaltar_totales(row):
